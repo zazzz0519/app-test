@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="fr"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Caisse</title>
+<style>
+:root{--bg:#f4f5f7;--card:#fff;--txt:#1d1d1f;--mut:#6b7280;--in:#16a34a;--out:#dc2626;--pri:#2563eb;--bd:#e5e7eb}
+@media(prefers-color-scheme:dark){:root{--bg:#111318;--card:#1c1f26;--txt:#f2f3f5;--mut:#9aa1ad;--bd:#2a2e37}}
+*{box-sizing:border-box}
+body{margin:0;font-family:sans-serif;background:var(--bg);color:var(--txt);padding:12px 12px 80px}
+.card{background:var(--card);border:1px solid var(--bd);border-radius:14px;padding:14px;margin-bottom:12px}
+.solde{font-size:34px;font-weight:700;text-align:center;margin:4px 0}
+.row{display:flex;gap:8px;margin-bottom:8px}
+.row>*{flex:1;min-width:0}
+input,select,button{font-size:16px;padding:10px;border-radius:10px;border:1px solid var(--bd);background:var(--bg);color:var(--txt)}
+button{background:var(--pri);color:#fff;border:0;font-weight:600}
+button.x{background:transparent;color:var(--mut);padding:4px 8px;flex:0}
+.in{color:var(--in)}.out{color:var(--out)}.mut{color:var(--mut);font-size:13px}
+.item{display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--bd)}
+.nav{position:fixed;bottom:0;left:0;right:0;display:flex;background:var(--card);border-top:1px solid var(--bd)}
+.nav button{flex:1;background:transparent;color:var(--mut);border-radius:0;padding:16px 0}
+.nav button.on{color:var(--pri)}
+.prod{display:flex;gap:8px;margin-bottom:8px}
+.prod .sell{flex:1;text-align:left;background:var(--bg);color:var(--txt);border:1px solid var(--bd)}
+h3{margin:0 0 10px}
+</style></head><body>
+<div id="app"></div>
+<div class="nav">
+<button id="t-caisse" onclick="go('caisse')">Caisse</button>
+<button id="t-prod" onclick="go('prod')">Produits</button>
+<button id="t-hist" onclick="go('hist')">Historique</button>
+</div>
+<script>
+const K='caisse_v1';
+let S=JSON.parse(localStorage.getItem(K)||'{"tx":[],"p":[]}');
+let tab='caisse';
+let fm=today().slice(0,7), fd='';
+const save=()=>localStorage.setItem(K,JSON.stringify(S));
+const $=id=>document.getElementById(id);
+const eur=n=>n.toLocaleString('fr-FR',{style:'currency',currency:'EUR'});
+function today(){return new Date(Date.now()-new Date().getTimezoneOffset()*6e4).toISOString().slice(0,10)}
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const sum=(l,t)=>l.filter(x=>x.type===t).reduce((a,x)=>a+x.amount,0);
+function go(t){tab=t;render()}
+function addTx(type,amount,cat,note,date){
+  if(!(amount>0)){alert('Montant invalide');return}
+  S.tx.push({id:Date.now()+Math.random(),type,amount:+amount,cat:cat||'Divers',note:note||'',date:date||today()});
+  save();render();
+}
+function delTx(id){if(confirm('Supprimer cette opération ?')){S.tx=S.tx.filter(x=>x.id!==id);save();render()}}
+function submitTx(){addTx($('type').value,parseFloat($('amt').value.replace(',','.')),$('cat').value.trim(),$('note').value.trim(),$('date').value)}
+function addProd(){
+  const n=$('pn').value.trim(),p=parseFloat($('pp').value.replace(',','.'));
+  if(!n||!(p>=0)){alert('Nom et prix requis');return}
+  S.p.push({id:Date.now()+Math.random(),name:n,price:p});save();render();
+}
+function delProd(id){if(confirm('Supprimer ce produit ?')){S.p=S.p.filter(x=>x.id!==id);save();render()}}
+function sell(id){const p=S.p.find(x=>x.id===id);addTx('in',p.price,'Vente',p.name,today())}
+function setM(v){fm=v;render()}
+function setD(v){fd=v;render()}
+function line(x,del){
+  return `<div class="item"><div><b>${esc(x.cat)}</b> ${x.note?'· '+esc(x.note):''}<div class="mut">${x.date}</div></div>
+  <div class="${x.type}">${x.type==='in'?'+':'−'}${eur(x.amount)}<button class="x" onclick="delTx(${x.id})">✕</button></div></div>`;
+}
+function render(){
+  ['caisse','prod','hist'].forEach(t=>$('t-'+t).className=tab===t?'on':'');
+  let h='';
+  if(tab==='caisse'){
+    const solde=sum(S.tx,'in')-sum(S.tx,'out');
+    const td=S.tx.filter(x=>x.date===today());
+    h+=`<div class="card"><div class="mut" style="text-align:center">Solde de caisse</div>
+    <div class="solde ${solde<0?'out':'in'}">${eur(solde)}</div>
+    <div class="row mut" style="text-align:center"><div>Aujourd'hui<br><span class="in">+${eur(sum(td,'in'))}</span> <span class="out">−${eur(sum(td,'out'))}</span></div></div></div>
+    <div class="card"><h3>Nouvelle opération</h3>
+    <div class="row"><select id="type"><option value="in">Entrée</option><option value="out">Sortie</option></select>
+    <input id="amt" type="text" inputmode="decimal" placeholder="Montant"></div>
+    <div class="row"><input id="cat" placeholder="Catégorie"><input id="date" type="date" value="${today()}"></div>
+    <div class="row"><input id="note" placeholder="Note (facultatif)"></div>
+    <button style="width:100%" onclick="submitTx()">Ajouter</button></div>
+    <div class="card"><h3>Dernières opérations</h3>${S.tx.slice(-5).reverse().map(line).join('')||'<div class="mut">Aucune opération</div>'}</div>`;
+  }
+  if(tab==='prod'){
+    h+=`<div class="card"><h3>Ajouter un produit</h3>
+    <div class="row"><input id="pn" placeholder="Nom"><input id="pp" type="text" inputmode="decimal" placeholder="Prix"></div>
+    <button style="width:100%" onclick="addProd()">Ajouter le produit</button></div>
+    <div class="card"><h3>Ventes (touche pour vendre)</h3>
+    ${S.p.map(p=>`<div class="prod"><button class="sell" onclick="sell(${p.id})">${esc(p.name)} — ${eur(p.price)}</button><button class="x" onclick="delProd(${p.id})">✕</button></div>`).join('')||'<div class="mut">Aucun produit</div>'}</div>`;
+  }
+  if(tab==='hist'){
+    const l=S.tx.filter(x=>fd?x.date===fd:x.date.startsWith(fm)).sort((a,b)=>b.date.localeCompare(a.date));
+    h+=`<div class="card"><h3>Historique</h3>
+    <div class="row"><input type="month" value="${fm}" onchange="setM(this.value);setD('')"><input type="date" value="${fd}" onchange="setD(this.value)"></div>
+    <div class="mut">Choisis un mois, ou un jour précis.</div></div>
+    <div class="card"><div class="row"><div class="in">Entrées<br><b>${eur(sum(l,'in'))}</b></div><div class="out">Sorties<br><b>${eur(sum(l,'out'))}</b></div><div>Net<br><b>${eur(sum(l,'in')-sum(l,'out'))}</b></div></div>
+    ${l.map(line).join('')||'<div class="mut">Aucune opération sur cette période</div>'}</div>`;
+  }
+  $('app').innerHTML=h;
+}
+render();
+</script></body></html>
